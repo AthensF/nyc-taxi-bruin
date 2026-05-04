@@ -2,7 +2,7 @@
 
 name: staging.trips
 
-type: duckdb.sql
+type: bq.sql
 
 depends:
   - ingestion.trips
@@ -10,57 +10,6 @@ depends:
 
 materialization:
   type: table
-  strategy: time_interval
-  incremental_key: pickup_datetime
-  time_granularity: timestamp
-
-columns:
-  - name: trip_id
-    type: string
-    description: Unique trip identifier
-    primary_key: true
-    nullable: false
-    checks:
-      - name: not_null
-  - name: taxi_type
-    type: string
-    description: Type of taxi (yellow or green)
-    checks:
-      - name: not_null
-  - name: pickup_datetime
-    type: timestamp
-    description: Trip pickup datetime
-    checks:
-      - name: not_null
-  - name: dropoff_datetime
-    type: timestamp
-    description: Trip dropoff datetime
-  - name: passenger_count
-    type: double
-    description: Number of passengers
-    checks:
-      - name: non_negative
-  - name: trip_distance
-    type: double
-    description: Trip distance in miles
-    checks:
-      - name: non_negative
-  - name: payment_type
-    type: integer
-    description: Payment type identifier
-  - name: payment_type_name
-    type: string
-    description: Payment type name from lookup
-  - name: fare_amount
-    type: double
-    description: Fare amount
-    checks:
-      - name: non_negative
-  - name: total_amount
-    type: double
-    description: Total amount
-    checks:
-      - name: non_negative
 
 @bruin */
 
@@ -74,7 +23,7 @@ WITH deduplicated AS (
         DROPOFF_DATETIME,
         PU_LOCATION_ID,
         DO_LOCATION_ID,
-        PASSENGER_COUNT
+        CAST(PASSENGER_COUNT AS STRING)
       ORDER BY EXTRACTED_AT DESC
     ) as row_num
   FROM ingestion.trips
@@ -84,15 +33,15 @@ WITH deduplicated AS (
     AND VENDOR_ID IS NOT NULL
 )
 SELECT
-  MD5(
+  TO_HEX(MD5(
     CONCAT(
-      COALESCE(CAST(TAXI_TYPE AS VARCHAR), ''),
-      COALESCE(CAST(PICKUP_DATETIME AS VARCHAR), ''),
-      COALESCE(CAST(DROPOFF_DATETIME AS VARCHAR), ''),
-      COALESCE(CAST(PU_LOCATION_ID AS VARCHAR), ''),
-      COALESCE(CAST(DO_LOCATION_ID AS VARCHAR), '')
+      COALESCE(CAST(TAXI_TYPE AS STRING), ''),
+      COALESCE(CAST(PICKUP_DATETIME AS STRING), ''),
+      COALESCE(CAST(DROPOFF_DATETIME AS STRING), ''),
+      COALESCE(CAST(PU_LOCATION_ID AS STRING), ''),
+      COALESCE(CAST(DO_LOCATION_ID AS STRING), '')
     )
-  ) as trip_id,
+  )) as trip_id,
   TAXI_TYPE as taxi_type,
   PICKUP_DATETIME as pickup_datetime,
   DROPOFF_DATETIME as dropoff_datetime,

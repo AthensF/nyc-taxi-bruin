@@ -13,7 +13,11 @@ schedule: monthly
 start_date: "2022-01-01"
 
 default_connections:
-  duckdb: duckdb-default
+  # For local development with DuckDB:
+  # duckdb: duckdb-default
+  
+  # For cloud deployment with BigQuery:
+  bigquery: gcp-default
 
 variables:
   taxi_types:

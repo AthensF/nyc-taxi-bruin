@@ -2,65 +2,13 @@
 
 name: reports.trips_report
 
-type: duckdb.sql
+type: bq.sql
 
 depends:
   - staging.trips
 
 materialization:
   type: table
-  strategy: time_interval
-  incremental_key: pickup_date
-  time_granularity: date
-
-columns:
-  - name: pickup_date
-    type: date
-    description: Date of trip pickup
-    primary_key: true
-  - name: taxi_type
-    type: string
-    description: Type of taxi (yellow or green)
-    primary_key: true
-  - name: payment_type_name
-    type: string
-    description: Payment type name
-    primary_key: true
-  - name: trip_count
-    type: bigint
-    description: Number of trips
-    checks:
-      - name: non_negative
-  - name: total_passengers
-    type: bigint
-    description: Total number of passengers
-    checks:
-      - name: non_negative
-  - name: total_distance
-    type: double
-    description: Total trip distance in miles
-    checks:
-      - name: non_negative
-  - name: total_fare_amount
-    type: double
-    description: Total fare amount
-    checks:
-      - name: non_negative
-  - name: total_amount
-    type: double
-    description: Total amount collected
-    checks:
-      - name: non_negative
-  - name: avg_trip_distance
-    type: double
-    description: Average trip distance
-    checks:
-      - name: non_negative
-  - name: avg_fare_amount
-    type: double
-    description: Average fare amount
-    checks:
-      - name: non_negative
 
 @bruin */
 
