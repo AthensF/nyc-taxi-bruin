@@ -10,6 +10,24 @@ depends:
 materialization:
   type: table
 
+columns:
+  - name: pickup_date
+    type: date
+    checks:
+      - name: not_null
+  - name: taxi_type
+    type: string
+    checks:
+      - name: not_null
+  - name: payment_type_name
+    type: string
+    checks:
+      - name: not_null
+  - name: trip_count
+    type: integer
+    checks:
+      - name: not_null
+
 @bruin */
 
 SELECT

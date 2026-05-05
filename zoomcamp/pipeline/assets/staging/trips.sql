@@ -11,6 +11,28 @@ depends:
 materialization:
   type: table
 
+columns:
+  - name: trip_id
+    type: string
+    checks:
+      - name: not_null
+  - name: taxi_type
+    type: string
+    checks:
+      - name: not_null
+  - name: pickup_datetime
+    type: timestamp
+    checks:
+      - name: not_null
+  - name: dropoff_datetime
+    type: timestamp
+    checks:
+      - name: not_null
+  - name: payment_type_name
+    type: string
+    checks:
+      - name: not_null
+
 @bruin */
 
 WITH deduplicated AS (

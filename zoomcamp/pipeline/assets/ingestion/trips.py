@@ -19,9 +19,13 @@ columns:
   - name: pickup_datetime
     type: timestamp
     description: Trip pickup datetime
+    checks:
+      - name: not_null
   - name: dropoff_datetime
     type: timestamp
     description: Trip dropoff datetime
+    checks:
+      - name: not_null
   - name: passenger_count
     type: double
     description: Number of passengers
@@ -73,6 +77,8 @@ columns:
   - name: taxi_type
     type: string
     description: Type of taxi (yellow or green)
+    checks:
+      - name: not_null
   - name: extracted_at
     type: timestamp
     description: Timestamp when data was extracted

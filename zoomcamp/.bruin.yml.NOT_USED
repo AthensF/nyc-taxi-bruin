@@ -1,0 +1,18 @@
+environments:
+  default:
+    connections:
+      # DuckDB connection (for local development)
+      duckdb:
+        - name: "duckdb-default"
+          path: "duckdb.db"
+      
+      # BigQuery connection (for cloud deployment)
+      google_cloud_platform:
+        - name: "gcp-default"
+          project_id: "your-gcp-project-id"  # TODO: Replace with your actual GCP project ID
+          location: "US"  # or "EU", or your specific region
+          # Authentication: Choose ONE option below
+          use_application_default_credentials: true
+          # service_account_file: "/path/to/service-account.json"
+          # service_account_json: |
+          #   { "type": "service_account", ... }
