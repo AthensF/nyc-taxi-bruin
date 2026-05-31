@@ -26,7 +26,7 @@ from agents.graph import Deps, build_langgraph
 from agents.trace import init as trace_init
 
 
-def main(reset: bool = True) -> dict:
+def main(reset: bool = True, force_reject: bool = False) -> dict:
     trace_init(WEAVE_PROJECT)
 
     from agents import llm
@@ -35,6 +35,24 @@ def main(reset: bool = True) -> dict:
     gateway = DirectGateway()
     deps = Deps(gateway=gateway, diagnoser=llm.diagnoser, fixer=llm.fixer,
                 reviewer=llm.reviewer, max_attempts=MAX_ATTEMPTS)
+
+    if force_reject:
+        # Stage a realistic half-fix as attempt 1 (projection updated, JOIN still on
+        # PAYMENT_TYPE) so the REAL Reviewer genuinely vetoes it -> guaranteed one
+        # negotiation round, then the real Fixer corrects it on attempt 2.
+        real_fixer = deps.fixer
+        def _staged_fixer(state, attempt_n):
+            if attempt_n == 1:
+                from agents.contracts import FixCandidate
+                current = open(state['staging_asset_path']).read()
+                half = current.replace('PAYMENT_TYPE as payment_type',
+                                       'PAYMENT_METHOD as payment_type', 1)
+                return FixCandidate(attempt_n=1, sql=half,
+                    summary='(staged) updated the projection but left the lookup JOIN on PAYMENT_TYPE',
+                    files_changed=['zoomcamp/pipeline/assets/staging/trips.sql'], blast_radius='low')
+            return real_fixer(state, attempt_n)
+        deps.fixer = _staged_fixer
+        print('\U0001f3ad  --force-reject: seeding a half-fix as attempt 1 (guarantees one Reviewer veto)')
 
     initial = {
         "staging_asset_path": str(STAGING_ASSET_PATH),
@@ -86,5 +104,7 @@ def _summary(final: dict) -> None:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--no-reset", action="store_true", help="leave the pipeline mutated")
+    ap.add_argument("--force-reject", action="store_true",
+                    help="seed a half-fix as attempt 1 to guarantee a visible Reviewer veto")
     args = ap.parse_args()
-    main(reset=not args.no_reset)
+    main(reset=not args.no_reset, force_reject=args.force_reject)
