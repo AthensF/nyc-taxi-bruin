@@ -10,6 +10,12 @@ from __future__ import annotations
 import argparse
 import subprocess
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()  # pull keys from a local .env so you don't re-type them
+except Exception:
+    pass
+
 from agents.contracts import (
     COLUMN_RENAME,
     MAX_ATTEMPTS,

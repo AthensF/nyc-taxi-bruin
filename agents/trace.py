@@ -10,6 +10,9 @@ try:
     import weave as _weave
 
     def init(project: str | None = None):
+        import os
+        if not os.environ.get("WANDB_API_KEY"):
+            return None  # no Weave login -> run untraced instead of hanging on a prompt
         try:
             return _weave.init(project)
         except Exception:

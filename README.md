@@ -13,3 +13,8 @@ Read `PLAN.md`, then find your lane in its **"Parallelization — workstreams"**
 (A: data/pipeline · B: agents/orchestration · C: observability/demo) and honor the
 `agents/contracts.py` seam. The **done heuristic** for the whole demo is that the healed
 pipeline can still answer *"what is the highest-grossing day during the month?"*
+
+## Run the demo
+
+1. `cp .env.example .env` and paste your `ANTHROPIC_API_KEY` (and optionally `WANDB_API_KEY` for the Weave trace).
+2. `./demo.sh`  — first run builds `.venv`; it injects drift, the agents heal it, verifies, and resets.
