@@ -96,7 +96,7 @@ def verify(state: RepairState, deps: Deps) -> dict:
 
 @op
 def assess_quality(state: RepairState, deps: Deps) -> dict:
-    # Non-gating: rate the shipped SQL on quality/maintainability; annotate, don't block.
+    # Rate the proposed SQL (post-review, pre-deploy) on quality/maintainability.
     if not deps.quality_assessor:
         return {}
     return {"quality": deps.quality_assessor(state)}
@@ -132,12 +132,13 @@ def run_repair(initial: dict, deps: Deps) -> dict:
         if nxt == "needs_human":
             state["final_status"] = "needs_human"
             return state
-        # approved → deploy + verify + quality scorecard
-        state.update(deploy(state, deps))
-        state.update(verify(state, deps))
+        # approved on correctness → score quality BEFORE shipping
         state.update(assess_quality(state, deps))
         if _quality_reject(state, deps):
-            continue  # quality below the bar → loop back for another fix pass
+            continue  # correct but below the quality bar → another fix pass
+        # cleared both gates → deploy + verify once
+        state.update(deploy(state, deps))
+        state.update(verify(state, deps))
         return state
 
 
@@ -162,14 +163,14 @@ def build_langgraph(deps: Deps):
     sg.add_conditional_edges(
         "review",
         lambda s: route_after_review(s, deps),
-        {"deploy": "deploy", "fix": "fix", "needs_human": "needs_human"},
+        {"deploy": "assess_quality", "fix": "fix", "needs_human": "needs_human"},
     )
-    sg.add_edge("deploy", "verify")
-    sg.add_edge("verify", "assess_quality")
     sg.add_conditional_edges(
         "assess_quality",
-        lambda s: "fix" if _quality_reject(s, deps) else "end",
-        {"fix": "fix", "end": END},
+        lambda s: "fix" if _quality_reject(s, deps) else "deploy",
+        {"fix": "fix", "deploy": "deploy"},
     )
+    sg.add_edge("deploy", "verify")
+    sg.add_edge("verify", END)
     sg.add_edge("needs_human", END)
     return sg.compile()
