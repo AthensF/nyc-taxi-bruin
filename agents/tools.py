@@ -9,6 +9,7 @@ Part B develops against contracts.FakeGateway; this is swapped in at integration
 """
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -22,6 +23,11 @@ from agents.contracts import (
 )
 from agents.trace import op
 
+# the seeded demo data is Jan 2022; without an explicit window bruin uses the schedule
+# default (outside the loaded data) and rebuilds 0 rows -> empty reports/oracle.
+DEMO_START_DATE = os.environ.get("DEMO_START_DATE", "2022-01-01")
+DEMO_END_DATE = os.environ.get("DEMO_END_DATE", "2022-02-01")
+
 
 class DirectGateway:
     def __init__(self, duckdb_path: Path = DUCKDB_PATH, repo_root: Path = REPO_ROOT):
@@ -31,8 +37,10 @@ class DirectGateway:
     @op
     def run_bruin(self, asset_path: str, downstream: bool = True, command: str = "run") -> ToolResult:
         cmd = ["bruin", command, asset_path]
-        if downstream and command == "run":
-            cmd.append("--downstream")
+        if command == "run":
+            if downstream:
+                cmd.append("--downstream")
+            cmd += ["--start-date", DEMO_START_DATE, "--end-date", DEMO_END_DATE]
         proc = subprocess.run(
             cmd, cwd=str(self.repo_root), capture_output=True, text=True, timeout=600
         )

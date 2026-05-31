@@ -51,6 +51,7 @@ def main(reset: bool = True) -> dict:
             gateway.run_sql(COLUMN_RENAME.reset_sql)
             subprocess.run(["git", "checkout", "--", str(STAGING_ASSET_PATH)],
                            capture_output=True, text=True)
+            gateway.run_bruin(str(STAGING_ASSET_PATH), downstream=True)  # rebuild reports (windowed)
         entity_project = WEAVE_PROJECT
         print(f"🔭  Weave trace: https://wandb.ai/{entity_project}")
 
