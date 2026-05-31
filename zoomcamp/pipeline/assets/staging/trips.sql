@@ -2,7 +2,7 @@
 
 name: staging.trips
 
-type: bq.sql
+type: duckdb.sql
 
 depends:
   - ingestion.trips

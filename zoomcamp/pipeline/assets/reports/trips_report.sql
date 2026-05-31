@@ -2,7 +2,7 @@
 
 name: reports.trips_report
 
-type: bq.sql
+type: duckdb.sql
 
 depends:
   - staging.trips

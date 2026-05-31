@@ -14,10 +14,10 @@ start_date: "2022-01-01"
 
 default_connections:
   # For local development with DuckDB:
-  # duckdb: duckdb-default
+  duckdb: duckdb-default
   
   # For cloud deployment with BigQuery:
-  bigquery: gcp-default
+  # bigquery: gcp-default
 
 variables:
   taxi_types:
