@@ -1,0 +1,8 @@
+langgraph
+langchain-anthropic
+anthropic
+weave
+mcp[cli]
+duckdb
+python-dotenv
+pytest
