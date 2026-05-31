@@ -161,6 +161,17 @@ def test_quality_scorecard_emitted_after_heal():
     assert isinstance(q, QualityScore) and 1 <= q.overall <= 10
 
 
+def test_quality_gate_forces_another_pass(monkeypatch):
+    import agents.graph as g
+    monkeypatch.setattr(g, "QUALITY_MIN", 9)              # require >=9; scorer always returns 8
+    deps = _deps([HALF_SQL, GOOD_SQL], max_attempts=5)
+    deps.quality_assessor = scripted_quality_assessor
+    final = g.run_repair(_initial(), deps)
+    assert final["attempts"] == 5                         # kept re-fixing until budget exhausted
+    assert final["quality"].overall == 8                  # never reached the bar
+    assert final["final_status"] == "healed"              # ships best-effort (pipeline IS fixed)
+
+
 # --- LLM-backed smoke (skipped without a key) --------------------------------------- #
 @pytest.mark.llm
 def test_llm_reviewer_rejects_half_fix():

@@ -42,7 +42,7 @@ REPORTS_ASSET_PATH = REPO_ROOT / "zoomcamp" / "pipeline" / "assets" / "reports" 
 
 WEAVE_PROJECT = os.environ.get("WEAVE_PROJECT", "afitzc-mit/self-healing-elt")
 AGENT_MODEL = os.environ.get("AGENT_MODEL", "claude-sonnet-4-6")
-MAX_ATTEMPTS = int(os.environ.get("MAX_ATTEMPTS", "3"))
+MAX_ATTEMPTS = int(os.environ.get("MAX_ATTEMPTS", "5"))
 
 # The business done-heuristic: "what is the highest-grossing day during the month?"
 ORACLE_SQL = (

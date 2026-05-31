@@ -87,6 +87,9 @@ def diagnoser(evidence: dict, state: dict):
 def fixer(state: dict, attempt_n: int) -> FixCandidate:
     current = _read(state["staging_asset_path"])
     feedback = state["review"].rationale if state.get("review") else ""
+    q = state.get("quality")
+    if q and getattr(q, "overall", 0):
+        feedback += f"  [prior quality {q.overall}/10 — improve: {q.rationale}]"
     user = (
         f"Diagnosis: {state['diagnosis'].root_cause}\n"
         f"Acceptance criteria: {state['diagnosis'].acceptance_criteria}\n"

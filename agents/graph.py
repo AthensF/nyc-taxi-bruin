@@ -9,6 +9,7 @@ deterministic scripted policies and run_demo uses the LLM-backed ones from llm.p
 """
 from __future__ import annotations
 
+import os
 import uuid
 from dataclasses import dataclass
 from typing import Callable
@@ -19,6 +20,10 @@ from agents.contracts import (
     VerifyResult,
 )
 from agents.trace import op
+
+# Quality gate: 0 = off (scorecard is informational). Set e.g. QUALITY_MIN=9 to force
+# another fix pass whenever the shipped SQL scores below 9 (i.e. 8 or below).
+QUALITY_MIN = int(os.environ.get("QUALITY_MIN", "0"))
 
 
 @dataclass
@@ -97,6 +102,20 @@ def assess_quality(state: RepairState, deps: Deps) -> dict:
     return {"quality": deps.quality_assessor(state)}
 
 
+def _quality_reject(state: dict, deps: Deps) -> bool:
+    """True iff the gate is on, the score is below QUALITY_MIN, and attempts remain.
+
+    Pure (no side-effects) so run_repair and the LangGraph adapter agree. When attempts
+    are exhausted we ship the best-effort fix as `healed` — the pipeline IS fixed, and the
+    residual is usually pre-existing style, not something the patch introduced — with the
+    quality score left on record.
+    """
+    q = state.get("quality")
+    if QUALITY_MIN <= 0 or not q or q.overall >= QUALITY_MIN:
+        return False
+    return state.get("attempts", 0) < deps.max_attempts
+
+
 # --------------------------------------------------------------------------- #
 # Driver 1 — plain Python loop (the testable source of truth)                  #
 # --------------------------------------------------------------------------- #
@@ -113,11 +132,13 @@ def run_repair(initial: dict, deps: Deps) -> dict:
         if nxt == "needs_human":
             state["final_status"] = "needs_human"
             return state
-        break  # approve → deploy
-    state.update(deploy(state, deps))
-    state.update(verify(state, deps))
-    state.update(assess_quality(state, deps))
-    return state
+        # approved → deploy + verify + quality scorecard
+        state.update(deploy(state, deps))
+        state.update(verify(state, deps))
+        state.update(assess_quality(state, deps))
+        if _quality_reject(state, deps):
+            continue  # quality below the bar → loop back for another fix pass
+        return state
 
 
 # --------------------------------------------------------------------------- #
@@ -145,6 +166,10 @@ def build_langgraph(deps: Deps):
     )
     sg.add_edge("deploy", "verify")
     sg.add_edge("verify", "assess_quality")
-    sg.add_edge("assess_quality", END)
+    sg.add_conditional_edges(
+        "assess_quality",
+        lambda s: "fix" if _quality_reject(s, deps) else "end",
+        {"fix": "fix", "end": END},
+    )
     sg.add_edge("needs_human", END)
     return sg.compile()
