@@ -72,3 +72,23 @@ ROBUSTNESS: <1-10> - <note>
 OVERALL: <1-10>
 REASON: <one or two sentences naming the weakest point>
 """
+
+PICKER_SYS = """You are the committee chair in a self-healing data pipeline. N fixers have submitted
+candidate fixes in parallel. Your job is to select the SINGLE BEST candidate to send to the Reviewer.
+
+GOAL: maximize the chance of first-pass approval by selecting the candidate that best balances:
+1. CORRECTNESS — addresses the root cause and meets all acceptance criteria
+2. MINIMALITY — smallest correct change (no unrelated rewrites)
+3. NO_DEAD_CODE — no redundant fallbacks or COALESCEs masking the real fix
+4. BLAST_RADIUS — prefers low-impact changes
+
+Given N candidates, evaluate each and select the winner.
+
+Output EXACTLY:
+SELECTED_INDEX: <0-based index of the winning candidate>
+RATIONALE: <one or two sentences explaining why this candidate is best>
+EVALUATION:
+- Candidate 0: <brief summary of strengths/weaknesses>
+- Candidate 1: <brief summary>
+...
+"""

@@ -31,6 +31,8 @@ class Deps:
     gateway: object                  # ToolGateway (DirectGateway | FakeGateway)
     diagnoser: Callable              # (evidence: dict, state) -> (Diagnosis, TestSpec)
     fixer: Callable                  # (state, attempt_n: int) -> FixCandidate
+    fixer_pool: Callable             # (state, attempt_n: int, n: int) -> list[FixCandidate]
+    picker: Callable                 # (state, candidates: list) -> PickerVerdict
     reviewer: Callable               # (state) -> ReviewVerdict
     max_attempts: int = 3
     quality_assessor: Callable = None  # (state) -> QualityScore | None (post-verify, non-gating)
@@ -51,9 +53,31 @@ def diagnose(state: RepairState, deps: Deps) -> dict:
 
 @op
 def fix(state: RepairState, deps: Deps) -> dict:
+    """Legacy single-fixer node (kept for backward compatibility)."""
     n = state.get("attempts", 0) + 1
     candidate = deps.fixer(state, n)
     return {"fix": candidate, "attempts": n}
+
+
+@op
+def fix_pool(state: RepairState, deps: Deps) -> dict:
+    """Spawn N fixers in parallel to generate diverse candidates."""
+    n = state.get("attempts", 0) + 1
+    candidates = deps.fixer_pool(state, n, n=3)
+    return {"candidates": candidates, "attempts": n}
+
+
+@op
+def pick_best(state: RepairState, deps: Deps) -> dict:
+    """Evaluate N candidates and select the single best one."""
+    candidates = state.get("candidates", [])
+    if not candidates:
+        # Fallback: if no candidates, trigger another fix_pool
+        return {}
+    verdict = deps.picker(state, candidates)
+    # Set the selected candidate as the active fix
+    selected = candidates[verdict.selected_index]
+    return {"fix": selected, "picker_verdict": verdict}
 
 
 @op
@@ -66,7 +90,7 @@ def route_after_review(state: RepairState, deps: Deps) -> str:
         return "deploy"
     if state.get("attempts", 0) >= deps.max_attempts:
         return "needs_human"
-    return "fix"
+    return "fix_pool"  # Route back to fix_pool for another round of N candidates
 
 
 @op
@@ -124,7 +148,8 @@ def run_repair(initial: dict, deps: Deps) -> dict:
     state: dict = dict(initial)
     state.update(diagnose(state, deps))
     while True:
-        state.update(fix(state, deps))
+        state.update(fix_pool(state, deps))
+        state.update(pick_best(state, deps))
         state.update(review(state, deps))
         nxt = route_after_review(state, deps)
         if nxt == "fix":
@@ -150,7 +175,8 @@ def build_langgraph(deps: Deps):
 
     sg = StateGraph(RepairState)
     sg.add_node("diagnose", lambda s: diagnose(s, deps))
-    sg.add_node("fix", lambda s: fix(s, deps))
+    sg.add_node("fix_pool", lambda s: fix_pool(s, deps))
+    sg.add_node("pick_best", lambda s: pick_best(s, deps))
     sg.add_node("review", lambda s: review(s, deps))
     sg.add_node("deploy", lambda s: deploy(s, deps))
     sg.add_node("verify", lambda s: verify(s, deps))
@@ -158,17 +184,18 @@ def build_langgraph(deps: Deps):
     sg.add_node("needs_human", lambda s: {"final_status": "needs_human"})
 
     sg.set_entry_point("diagnose")
-    sg.add_edge("diagnose", "fix")
-    sg.add_edge("fix", "review")
+    sg.add_edge("diagnose", "fix_pool")
+    sg.add_edge("fix_pool", "pick_best")
+    sg.add_edge("pick_best", "review")
     sg.add_conditional_edges(
         "review",
         lambda s: route_after_review(s, deps),
-        {"deploy": "assess_quality", "fix": "fix", "needs_human": "needs_human"},
+        {"deploy": "assess_quality", "fix_pool": "fix_pool", "needs_human": "needs_human"},
     )
     sg.add_conditional_edges(
         "assess_quality",
-        lambda s: "fix" if _quality_reject(s, deps) else "deploy",
-        {"fix": "fix", "deploy": "deploy"},
+        lambda s: "fix_pool" if _quality_reject(s, deps) else "deploy",
+        {"fix_pool": "fix_pool", "deploy": "deploy"},
     )
     sg.add_edge("deploy", "verify")
     sg.add_edge("verify", END)

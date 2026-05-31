@@ -33,9 +33,16 @@ def main(reset: bool = True, force_reject: bool = False) -> dict:
     from agents.tools import DirectGateway
 
     gateway = DirectGateway()
-    deps = Deps(gateway=gateway, diagnoser=llm.diagnoser, fixer=llm.fixer,
-                reviewer=llm.reviewer, max_attempts=MAX_ATTEMPTS,
-                quality_assessor=llm.quality_assessor)
+    deps = Deps(
+        gateway=gateway,
+        diagnoser=llm.diagnoser,
+        fixer=llm.fixer,  # Legacy single-fixer (kept for backward compatibility)
+        fixer_pool=llm.fixer_pool,  # Best-of-n: parallel fixers
+        picker=llm.picker,  # Best-of-n: selects winner from pool
+        reviewer=llm.reviewer,
+        max_attempts=MAX_ATTEMPTS,
+        quality_assessor=llm.quality_assessor,
+    )
 
     if force_reject:
         # Stage a realistic half-fix as attempt 1 (projection updated, JOIN still on

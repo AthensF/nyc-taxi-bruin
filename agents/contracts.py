@@ -139,6 +139,14 @@ class QualityScore:
     criteria: dict = field(default_factory=dict)   # {criterion: {"score": int, "note": str}}
 
 
+@dataclass
+class PickerVerdict:
+    """The committee-chair decision (Picker → Reviewer). Selects the best candidate from N fixers."""
+    selected_index: int                 # Index of the winning candidate in candidates list
+    rationale: str = ""
+    evaluation: list = field(default_factory=list)  # [{index, scores, summary}, ...]
+
+
 # --------------------------------------------------------------------------- #
 # Graph state — the LangGraph blackboard                                       #
 # --------------------------------------------------------------------------- #
@@ -158,6 +166,10 @@ class RepairState(TypedDict):
     verify: NotRequired[VerifyResult]
     authorization: NotRequired[Authorization]
     quality: NotRequired[QualityScore]
+
+    # best-of-n fixers
+    candidates: NotRequired[list[FixCandidate]]  # N parallel fix candidates
+    picker_verdict: NotRequired[PickerVerdict]   # Picker's selection
 
     # outcome
     final_status: NotRequired[str]      # "healed" | "needs_human" | "noop"

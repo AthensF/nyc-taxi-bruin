@@ -14,11 +14,12 @@ from agents.contracts import (
     COLUMN_RENAME,
     Diagnosis,
     FixCandidate,
+    PickerVerdict,
     QualityScore,
     ReviewVerdict,
     TestSpec,
 )
-from agents.prompts import DIAGNOSER_SYS, FIXER_SYS, QUALITY_SYS, REVIEWER_SYS
+from agents.prompts import DIAGNOSER_SYS, FIXER_SYS, PICKER_SYS, QUALITY_SYS, REVIEWER_SYS
 from agents.trace import op
 
 # Per-role models — weak proposer, strong critic by default; all env-overridable.
@@ -154,4 +155,94 @@ def quality_assessor(state: dict) -> QualityScore:
         overall=_int(_kv(txt, "OVERALL")),
         rationale=_kv(txt, "REASON") or txt[:200],
         criteria=criteria,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Best-of-N Fixers Pool                                                       #
+# --------------------------------------------------------------------------- #
+FIXER_PERSONAS = [
+    "Be conservative: make the smallest possible change. No refactoring, no style changes.",
+    "Be balanced: make a clean, correct change that addresses the root cause.",
+    "Be thorough: ensure edge cases are handled and the fix is robust.",
+]
+
+
+@op
+def fixer_pool(state: dict, attempt_n: int, n: int = 3) -> list[FixCandidate]:
+    """Spawn N fixers in parallel, each with a different persona bias."""
+    from concurrent.futures import ThreadPoolExecutor
+    from langchain_anthropic import ChatAnthropic
+
+    current = _read(state["staging_asset_path"])
+    feedback = state["review"].rationale if state.get("review") else ""
+    q = state.get("quality")
+    if q and getattr(q, "overall", 0):
+        feedback += f"  [prior quality {q.overall}/10 — improve: {q.rationale}]"
+    
+    user = (
+        f"Diagnosis: {state['diagnosis'].root_cause}\n"
+        f"Acceptance criteria: {state['diagnosis'].acceptance_criteria}\n"
+        f"Prior reviewer feedback (if any): {feedback}\n\n"
+        f"Current staging SQL:\n{current}\n\n"
+        "Return the FULL corrected file in one ```sql fence."
+    )
+
+    def _spawn_fixer(persona: str) -> FixCandidate:
+        llm = ChatAnthropic(model=FIXER_MODEL, max_tokens=2048, temperature=0)
+        system_with_persona = f"{FIXER_SYS}\n\n{persona}"
+        response = llm.invoke([("system", system_with_persona), ("human", user)]).content
+        sql = _fenced_sql(response) or current
+        return FixCandidate(
+            attempt_n=attempt_n,
+            sql=sql,
+            summary=_kv(response, "SUMMARY") or "patched staging SQL",
+            files_changed=["zoomcamp/pipeline/assets/staging/trips.sql"],
+            blast_radius=_kv(response, "BLAST_RADIUS") or "low",
+        )
+
+    with ThreadPoolExecutor(max_workers=n) as executor:
+        futures = [executor.submit(_spawn_fixer, persona) for persona in FIXER_PERSONAS[:n]]
+        return [f.result() for f in futures]
+
+
+@op
+def picker(state: dict, candidates: list[FixCandidate]) -> PickerVerdict:
+    """Evaluate N candidates and select the single best one."""
+    from langchain_anthropic import ChatAnthropic
+
+    llm = ChatAnthropic(model=AGENT_MODEL, max_tokens=2048, temperature=0)
+    
+    # Build candidate summaries
+    candidate_summaries = []
+    for i, c in enumerate(candidates):
+        summary = (
+            f"Candidate {i}:\n"
+            f"- Summary: {c.summary}\n"
+            f"- Blast radius: {c.blast_radius}\n"
+            f"- SQL preview: {c.sql[:200]}...\n"
+        )
+        candidate_summaries.append(summary)
+    
+    user = (
+        f"Diagnosis root cause: {state['diagnosis'].root_cause}\n"
+        f"Acceptance criteria: {state['diagnosis'].acceptance_criteria}\n\n"
+        f"Candidates:\n\n" + "\n\n".join(candidate_summaries)
+    )
+    
+    txt = llm.invoke([("system", PICKER_SYS), ("human", user)]).content
+    
+    selected_idx = _int(_kv(txt, "SELECTED_INDEX"))
+    # Clamp to valid range
+    selected_idx = max(0, min(selected_idx, len(candidates) - 1))
+    
+    evaluation = _list(txt, "EVALUATION")
+    eval_parsed = []
+    for i, ev in enumerate(evaluation):
+        eval_parsed.append({"index": i, "summary": ev})
+    
+    return PickerVerdict(
+        selected_index=selected_idx,
+        rationale=_kv(txt, "RATIONALE") or txt[:200],
+        evaluation=eval_parsed,
     )
