@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Self-Healing ELT Pipeline — Best-of-N Fixers Demo</title>
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --bg: #0f172a;
+            --bg-card: #1e293b;
+            --text: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: #334155;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding: 2rem;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border-radius: 1rem;
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(to right, #fff, #e0e7ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            font-size: 1.25rem;
+            color: #e0e7ff;
+            opacity: 0.9;
+        }
+
+        .section {
+            background: var(--bg-card);
+            border-radius: 1rem;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border: 1px solid var(--border);
+        }
+
+        h2 {
+            font-size: 1.75rem;
+            margin-bottom: 1rem;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        h2::before {
+            content: '▸';
+            color: var(--success);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .card {
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid var(--border);
+            border-radius: 0.75rem;
+            padding: 1.5rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.2);
+            border-color: var(--primary);
+        }
+
+        .card h3 {
+            font-size: 1.25rem;
+            margin-bottom: 0.75rem;
+            color: var(--text);
+        }
+
+        .card p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .flow-diagram {
+            background: rgba(15, 23, 42, 0.8);
+            border-radius: 0.75rem;
+            padding: 2rem;
+            margin: 1.5rem 0;
+            overflow-x: auto;
+        }
+
+        .flow-step {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.75rem 1.5rem;
+            background: var(--primary);
+            border-radius: 0.5rem;
+            font-weight: 600;
+            margin: 0.5rem;
+            min-width: 140px;
+        }
+
+        .flow-arrow {
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            margin: 0 0.5rem;
+        }
+
+        .flow-branch {
+            display: block;
+            text-align: center;
+            margin: 1rem 0;
+            padding-left: 2rem;
+        }
+
+        .flow-branch .flow-step {
+            background: var(--success);
+        }
+
+        .flow-branch .flow-step.reject {
+            background: var(--danger);
+        }
+
+        .code-block {
+            background: #0d1117;
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            overflow-x: auto;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            margin: 1rem 0;
+        }
+
+        .code-block .command {
+            color: var(--success);
+        }
+
+        .code-block .comment {
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .code-block .flag {
+            color: var(--warning);
+        }
+
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .metric {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid var(--success);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--success);
+        }
+
+        .metric-label {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        .highlight {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(79, 70, 229, 0.2));
+            border-left: 4px solid var(--primary);
+            padding: 1rem 1.5rem;
+            margin: 1rem 0;
+            border-radius: 0 0.5rem 0.5rem 0;
+        }
+
+        ul {
+            margin-left: 1.5rem;
+            margin-top: 0.5rem;
+        }
+
+        li {
+            margin-bottom: 0.5rem;
+            color: var(--text-muted);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-left: 0.5rem;
+        }
+
+        .badge.new {
+            background: var(--success);
+            color: #fff;
+        }
+
+        .badge.warning {
+            background: var(--warning);
+            color: #000;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 3rem;
+            padding: 2rem;
+            color: var(--text-muted);
+            border-top: 1px solid var(--border);
+        }
+
+        .demo-steps {
+            counter-reset: step;
+        }
+
+        .demo-step {
+            position: relative;
+            padding-left: 3rem;
+            margin: 1.5rem 0;
+        }
+
+        .demo-step::before {
+            counter-increment: step;
+            content: counter(step);
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 2rem;
+            height: 2rem;
+            background: var(--primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1rem;
+        }
+
+        .demo-step h4 {
+            font-size: 1.1rem;
+            color: var(--text);
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🛠️ Self-Healing ETL Pipeline</h1>
+            <p class="subtitle">Best-of-N Fixers with LLM-Powered Code Repair</p>
+        </header>
+
+        <section class="section">
+            <h2>The Problem</h2>
+            <div class="grid">
+                <div class="card">
+                    <h3>📊 Upstream Schema Changes</h3>
+                    <p>When an upstream table column is renamed (e.g., <code>payment_type → payment_method</code>), the pipeline's staging SQL layer breaks silently.</p>
+                </div>
+                <div class="card">
+                    <h3>⏱️ Manual Debugging</h3>
+                    <p>Traditional debugging requires reading error logs, inspecting schemas, and manually patching SQL — taking hours or days.</p>
+                </div>
+                <div class="card">
+                    <h3>🔄 Iterative Fixes</h3>
+                    <p>Single-agent approaches iterate slowly, getting one shot per cycle and relying entirely on feedback to improve.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2>The Solution: Best-of-N Fixers</h2>
+            <p style="color: var(--text-muted); margin-bottom: 1.5rem;">
+                Instead of one fixer agent iterating on feedback, we <strong>parallelize the creative work</strong> and use a <strong>judge</strong> to select the strongest candidate before review.
+            </p>
+
+            <div class="flow-diagram">
+                <div style="text-align: center;">
+                    <div class="flow-step">🔍 Diagnose</div>
+                    <span class="flow-arrow">→</span>
+                    <div class="flow-step">🔧 Fix Pool (N=3)</div>
+                    <span class="flow-arrow">→</span>
+                    <div class="flow-step">🎯 Picker</div>
+                    <span class="flow-arrow">→</span>
+                    <div class="flow-step">✅ Review</div>
+                    <span class="flow-arrow">→</span>
+                </div>
+                <div class="flow-branch">
+                    <span class="flow-arrow" style="display: inline-block; transform: rotate(90deg); margin: 0.5rem 0;">→</span><br>
+                    <div style="display: inline-flex; gap: 1rem;">
+                        <span class="flow-step">🚀 Deploy</span>
+                        <span class="flow-arrow" style="margin: 0 2rem;">→</span>
+                        <span class="flow-step">✓ Verify</span>
+                    </div>
+                </div>
+                <div class="flow-branch">
+                    <span class="flow-arrow" style="display: inline-block; transform: rotate(90deg); margin: 0.5rem 0;">→</span><br>
+                    <span class="flow-step reject">↺ Retry (back to Fix Pool)</span>
+                </div>
+            </div>
+
+            <div class="grid">
+                <div class="card">
+                    <h3>🔍 Diagnose</h3>
+                    <p>Reproduces the error, inspects schema drift, and proposes acceptance criteria the Fixer must satisfy.</p>
+                </div>
+                <div class="card">
+                    <h3>🔧 Fix Pool <span class="badge new">New</span></h3>
+                    <p>Spawns N=3 fixers in parallel, each with a different persona bias (Conservative, Balanced, Thorough).</p>
+                </div>
+                <div class="card">
+                    <h3>🎯 Picker <span class="badge new">New</span></h3>
+                    <p>LLM judge evaluates all candidates on correctness, minimality, no dead code, and blast radius.</p>
+                </div>
+                <div class="card">
+                    <h3>✅ Review</h3>
+                    <p>Senior engineer review checks correctness and quality. Only approves minimal, correct patches.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2>Live Demo Flow</h2>
+            <div class="demo-steps">
+                <div class="demo-step">
+                    <h4>Inject Schema Drift</h4>
+                    <p>Simulate an upstream rename: <code>payment_type → payment_method</code> in the trips table</p>
+                </div>
+                <div class="demo-step">
+                    <h4>Run the Demo</h4>
+                    <div class="code-block">
+<span class="command">./demo.sh</span>
+
+<span class="comment"># With quality gate (re-fixes if quality < 8)</span>
+<span class="flag">QUALITY_MIN</span>=8 <span class="command">./demo.sh</span>
+
+<span class="comment"># Force a rejection to see retry behavior</span>
+<span class="command">./demo.sh --force-reject</span></div>
+                </div>
+                <div class="demo-step">
+                    <h4>Watch the Agents Work</h4>
+                    <p>Three coordinated LLM agents negotiate a fix in an observable loop:</p>
+                    <ul>
+                        <li><strong>Diagnoser</strong> — Identifies root cause and acceptance criteria</li>
+                        <li><strong>Fix Pool</strong> — Generates 3 diverse candidates in parallel</li>
+                        <li><strong>Picker</strong> — Selects the best candidate</li>
+                        <li><strong>Reviewer</strong> — Approves or rejects with detailed feedback</li>
+                    </ul>
+                </div>
+                <div class="demo-step">
+                    <h4>Verify Healing</h4>
+                    <p>Pipeline runs the business oracle query: <em>"What is the highest-grossing day during the month?"</em></p>
+                </div>
+                <div class="demo-step">
+                    <h4>Inspect Weave Trace</h4>
+                    <div class="highlight">
+                        🔗 <a href="https://wandb.ai/afitzc-mit/self-healing-elt" target="_blank" style="color: var(--primary); text-decoration: none;">https://wandb.ai/afitzc-mit/self-healing-elt</a>
+                    </div>
+                    <p>Full conversation thread visible in WandB Weave — each agent emits typed milestone artifacts.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2>Key Metrics</h2>
+            <div class="metric-grid">
+                <div class="metric">
+                    <div class="metric-value">3×</div>
+                    <div class="metric-label">Parallel Fixers</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value">~1-2</div>
+                    <div class="metric-label">Avg Attempts to Heal</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value">5</div>
+                    <div class="metric-label">Quality Criteria</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value">100%</div>
+                    <div class="metric-label">Observable in Weave</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2>Architecture Highlights</h2>
+            <div class="grid">
+                <div class="card">
+                    <h3>📝 Typed Milestones</h3>
+                    <p>Each agent produces structured artifacts (Diagnosis, FixCandidate, ReviewVerdict) — not just text. Makes the trace readable like an incident thread.</p>
+                </div>
+                <div class="card">
+                    <h3>🎭 Persona Diversity</h3>
+                    <p>Fixers get different biases: Conservative (smallest change), Balanced (clean & correct), Thorough (edge cases handled).</p>
+                </div>
+                <div class="card">
+                    <h3>⚖️ Quality Gate</h3>
+                    <p>Optional <code>QUALITY_MIN</code> forces re-fix if the shipped SQL scores below threshold on 5 criteria (1-10 scale).</p>
+                </div>
+                <div class="card">
+                    <h3>🔬 Deterministic Tests</h3>
+                    <p>15 passing tests with scripted agents — no API key needed. Full test coverage of the orchestration logic.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2>Quality Assessment Criteria</h2>
+            <p style="color: var(--text-muted); margin-bottom: 1rem;">
+                Post-approval, every fix is scored on five dimensions. Set <code>QUALITY_MIN=8</code> to enforce a minimum bar.
+            </p>
+            <div class="grid">
+                <div class="card">
+                    <h3>✓ Correctness Contract</h3>
+                    <p>Preserves not_null checks and payment_type_name lookup</p>
+                </div>
+                <div class="card">
+                    <h3>📏 Minimality</h3>
+                    <p>Smallest change that works; no unrelated rewrites</p>
+                </div>
+                <div class="card">
+                    <h3>📖 Readability</h3>
+                    <p>Clear naming/formatting, consistent with surrounding style</p>
+                </div>
+                <div class="card">
+                    <h3>🗑️ No Dead Code</h3>
+                    <p>No redundant fallbacks or COALESCEs masking the real fix</p>
+                </div>
+                <div class="card">
+                    <h3>🛡️ Robustness</h3>
+                    <p>Sane null/type handling for edge cases</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <h2>Code Structure</h2>
+            <div class="code-block">
+agents/
+├── contracts.py      <span class="comment"># FROZEN: shared types & milestones</span>
+├── prompts.py        <span class="comment"># System prompts (DIAGNOSER_SYS, FIXER_SYS, PICKER_SYS)</span>
+├── llm.py            <span class="comment"># LLM-backed agents (diagnoser, fixer_pool, picker, reviewer)</span>
+├── graph.py          <span class="comment"># Orchestration loop (diagnose → fix_pool → pick_best → review)</span>
+├── tools.py          <span class="comment"># Tool gateway (bruin, DuckDB, schema inspection)</span>
+├── run_demo.py       <span class="comment"># Live demo entrypoint with Weave tracing</span>
+└── requirements.txt
+
+tests/
+└── test_agents.py    <span class="comment"># 15 passing tests (deterministic + LLM-backed)</span></div>
+        </section>
+
+        <section class="section">
+            <h2>Benefits</h2>
+            <ul>
+                <li><strong>Higher first-pass quality</strong> — Diversity of approaches increases chance of optimal solution</li>
+                <li><strong>Fewer round-trips</strong> — Picker selects best candidate before Reviewer sees it</li>
+                <li><strong>Parallel execution</strong> — 3× speedup in candidate generation</li>
+                <li><strong>Better quality signals</strong> — Picker provides evaluation rationale for all candidates</li>
+                <li><strong>Full observability</strong> — Every agent decision visible in Weave trace</li>
+                <li><strong>Testable</strong> — Deterministic tests with scripted agents, no API key required</li>
+            </ul>
+        </section>
+
+        <footer>
+            <p><strong>Branch:</strong> <code>demo-4-best-of-n-fixers</code> &nbsp;|&nbsp; <strong>Tests:</strong> 15 passed ✅ &nbsp;|&nbsp; <strong>Date:</strong> May 31, 2026</p>
+            <p style="margin-top: 1rem; font-size: 0.875rem;">
+                Built with LangGraph, Anthropic Claude, and WandB Weave
+            </p>
+        </footer>
+    </div>
+</body>
+</html>
