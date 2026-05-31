@@ -244,7 +244,8 @@ _FAKE_ERROR = (
 _FAKE_ORACLE_ROW = {"pickup_date": "2022-01-21", "gross_revenue": 187341.22}
 
 # bare `payment_type` NOT followed by `_name` (so payment_type_name is allowed)
-_BARE_PAYMENT_TYPE = re.compile(r"payment_type(?!_name)", re.IGNORECASE)
+# bare `payment_type` column only — NOT payment_type_name or payment_type_id (the lookup PK)
+_BARE_PAYMENT_TYPE = re.compile(r"payment_type(?![_a-zA-Z])", re.IGNORECASE)
 
 
 def _looks_fixed(content: Optional[str]) -> bool:
