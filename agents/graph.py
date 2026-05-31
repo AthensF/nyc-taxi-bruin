@@ -28,6 +28,7 @@ class Deps:
     fixer: Callable                  # (state, attempt_n: int) -> FixCandidate
     reviewer: Callable               # (state) -> ReviewVerdict
     max_attempts: int = 3
+    quality_assessor: Callable = None  # (state) -> QualityScore | None (post-verify, non-gating)
 
 
 # --------------------------------------------------------------------------- #
@@ -88,6 +89,14 @@ def verify(state: RepairState, deps: Deps) -> dict:
     return {"verify": vr, "final_status": "healed" if healed else "needs_human"}
 
 
+@op
+def assess_quality(state: RepairState, deps: Deps) -> dict:
+    # Non-gating: rate the shipped SQL on quality/maintainability; annotate, don't block.
+    if not deps.quality_assessor:
+        return {}
+    return {"quality": deps.quality_assessor(state)}
+
+
 # --------------------------------------------------------------------------- #
 # Driver 1 — plain Python loop (the testable source of truth)                  #
 # --------------------------------------------------------------------------- #
@@ -107,6 +116,7 @@ def run_repair(initial: dict, deps: Deps) -> dict:
         break  # approve → deploy
     state.update(deploy(state, deps))
     state.update(verify(state, deps))
+    state.update(assess_quality(state, deps))
     return state
 
 
@@ -122,6 +132,7 @@ def build_langgraph(deps: Deps):
     sg.add_node("review", lambda s: review(s, deps))
     sg.add_node("deploy", lambda s: deploy(s, deps))
     sg.add_node("verify", lambda s: verify(s, deps))
+    sg.add_node("assess_quality", lambda s: assess_quality(s, deps))
     sg.add_node("needs_human", lambda s: {"final_status": "needs_human"})
 
     sg.set_entry_point("diagnose")
@@ -133,6 +144,7 @@ def build_langgraph(deps: Deps):
         {"deploy": "deploy", "fix": "fix", "needs_human": "needs_human"},
     )
     sg.add_edge("deploy", "verify")
-    sg.add_edge("verify", END)
+    sg.add_edge("verify", "assess_quality")
+    sg.add_edge("assess_quality", END)
     sg.add_edge("needs_human", END)
     return sg.compile()

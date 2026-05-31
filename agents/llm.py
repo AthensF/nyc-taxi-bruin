@@ -5,6 +5,7 @@ run. Tests use scripted policies instead, so this module's heavy imports stay la
 """
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
@@ -13,17 +14,24 @@ from agents.contracts import (
     COLUMN_RENAME,
     Diagnosis,
     FixCandidate,
+    QualityScore,
     ReviewVerdict,
     TestSpec,
 )
-from agents.prompts import DIAGNOSER_SYS, FIXER_SYS, REVIEWER_SYS
+from agents.prompts import DIAGNOSER_SYS, FIXER_SYS, QUALITY_SYS, REVIEWER_SYS
 from agents.trace import op
 
+# Per-role models — weak proposer, strong critic by default; all env-overridable.
+# Set AGENT_MODEL to make every role uniform (the reliable stage-run setting).
+DIAGNOSER_MODEL = os.environ.get("DIAGNOSER_MODEL", AGENT_MODEL)
+FIXER_MODEL = os.environ.get("FIXER_MODEL") or os.environ.get("AGENT_MODEL") or "claude-haiku-4-5-20251001"
+REVIEWER_MODEL = os.environ.get("REVIEWER_MODEL", AGENT_MODEL)
 
-def _chat(system: str, user: str) -> str:
+
+def _chat(system: str, user: str, model: str = AGENT_MODEL) -> str:
     from langchain_anthropic import ChatAnthropic
 
-    llm = ChatAnthropic(model=AGENT_MODEL, max_tokens=2048, temperature=0)
+    llm = ChatAnthropic(model=model, max_tokens=2048, temperature=0)
     return llm.invoke([("system", system), ("human", user)]).content
 
 
@@ -57,7 +65,7 @@ def diagnoser(evidence: dict, state: dict):
         f"Upstream schema:\n{evidence.get('schema')}\n\n"
         f"Current staging SQL:\n{current}"
     )
-    txt = _chat(DIAGNOSER_SYS, user)
+    txt = _chat(DIAGNOSER_SYS, user, DIAGNOSER_MODEL)
     diagnosis = Diagnosis(
         root_cause=_kv(txt, "ROOT_CAUSE") or "upstream schema drift",
         why=_kv(txt, "WHY"),
@@ -86,7 +94,7 @@ def fixer(state: dict, attempt_n: int) -> FixCandidate:
         f"Current staging SQL:\n{current}\n\n"
         "Return the FULL corrected file in one ```sql fence."
     )
-    txt = _chat(FIXER_SYS, user)
+    txt = _chat(FIXER_SYS, user, FIXER_MODEL)
     return FixCandidate(
         attempt_n=attempt_n,
         sql=_fenced_sql(txt) or current,
@@ -102,7 +110,7 @@ def reviewer(state: dict) -> ReviewVerdict:
         f"Acceptance criteria:\n{state['diagnosis'].acceptance_criteria}\n\n"
         f"Proposed SQL:\n{state['fix'].sql}"
     )
-    txt = _chat(REVIEWER_SYS, user)
+    txt = _chat(REVIEWER_SYS, user, REVIEWER_MODEL)
     raw = (_kv(txt, "DECISION") or "reject").lower()
     decision = "approve" if raw.startswith("approve") else "reject"
     try:
@@ -115,4 +123,32 @@ def reviewer(state: dict) -> ReviewVerdict:
         rationale=_kv(txt, "RATIONALE") or txt[:200],
         correctness_findings=_list(txt, "CORRECTNESS"),
         quality_findings=_list(txt, "QUALITY"),
+    )
+
+
+def _scored(raw: str) -> dict:
+    m = re.match(r"\s*(\d+)\s*[-:]\s*(.*)", raw)
+    return {"score": int(m.group(1)), "note": m.group(2).strip()} if m else {"score": 0, "note": raw}
+
+
+def _int(raw: str) -> int:
+    m = re.search(r"\d+", raw or "")
+    return int(m.group()) if m else 0
+
+
+@op
+def quality_assessor(state: dict) -> QualityScore:
+    user = (
+        f"Acceptance criteria:\n{state['diagnosis'].acceptance_criteria}\n\n"
+        f"Deployed SQL:\n{state['fix'].sql}"
+    )
+    txt = _chat(QUALITY_SYS, user, REVIEWER_MODEL)
+    criteria = {
+        k.lower(): _scored(_kv(txt, k))
+        for k in ("CORRECTNESS_CONTRACT", "MINIMALITY", "READABILITY", "NO_DEAD_CODE", "ROBUSTNESS")
+    }
+    return QualityScore(
+        overall=_int(_kv(txt, "OVERALL")),
+        rationale=_kv(txt, "REASON") or txt[:200],
+        criteria=criteria,
     )

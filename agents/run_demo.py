@@ -34,7 +34,8 @@ def main(reset: bool = True, force_reject: bool = False) -> dict:
 
     gateway = DirectGateway()
     deps = Deps(gateway=gateway, diagnoser=llm.diagnoser, fixer=llm.fixer,
-                reviewer=llm.reviewer, max_attempts=MAX_ATTEMPTS)
+                reviewer=llm.reviewer, max_attempts=MAX_ATTEMPTS,
+                quality_assessor=llm.quality_assessor)
 
     if force_reject:
         # Stage a realistic half-fix as attempt 1 (projection updated, JOIN still on
@@ -99,6 +100,9 @@ def _summary(final: dict) -> None:
               f"healed={verify.healed}")
         if verify.oracle_answer:
             print(f"  oracle:   {verify.oracle_answer}  (highest-grossing day)")
+    quality = final.get("quality")
+    if quality:
+        print(f"  quality:  {quality.overall}/10 — {quality.rationale}")
 
 
 if __name__ == "__main__":

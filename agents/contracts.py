@@ -131,6 +131,14 @@ class Authorization:
     evidence: list = field(default_factory=list)
 
 
+@dataclass
+class QualityScore:
+    """Post-deploy quality/maintainability scorecard of the shipped SQL (non-gating)."""
+    overall: int                        # 1-10
+    rationale: str = ""
+    criteria: dict = field(default_factory=dict)   # {criterion: {"score": int, "note": str}}
+
+
 # --------------------------------------------------------------------------- #
 # Graph state — the LangGraph blackboard                                       #
 # --------------------------------------------------------------------------- #
@@ -149,6 +157,7 @@ class RepairState(TypedDict):
     review: NotRequired[ReviewVerdict]
     verify: NotRequired[VerifyResult]
     authorization: NotRequired[Authorization]
+    quality: NotRequired[QualityScore]
 
     # outcome
     final_status: NotRequired[str]      # "healed" | "needs_human" | "noop"

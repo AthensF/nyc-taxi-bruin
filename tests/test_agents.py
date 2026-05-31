@@ -16,6 +16,7 @@ from agents.contracts import (
     Diagnosis,
     FakeGateway,
     FixCandidate,
+    QualityScore,
     ReviewVerdict,
     VerifyResult,
 )
@@ -75,6 +76,11 @@ def scripted_reviewer(state) -> ReviewVerdict:
                              rationale="dead-code fallback on a renamed column",
                              quality_findings=["redundant COALESCE on payment_method"])
     return ReviewVerdict("approve", confidence=0.92, rationale="minimal, correct")
+
+
+def scripted_quality_assessor(state) -> QualityScore:
+    return QualityScore(overall=8, rationale="minimal, idiomatic; preserves the lookup contract",
+                        criteria={"minimality": {"score": 9, "note": "~2-line change"}})
 
 
 def _initial():
@@ -145,6 +151,14 @@ def test_milestones_emitted_as_typed_artifacts():
     assert isinstance(final["verify"], VerifyResult)
     assert isinstance(final["authorization"], Authorization)
     assert final["authorization"].audit_id            # has an audit id
+
+
+def test_quality_scorecard_emitted_after_heal():
+    deps = _deps([HALF_SQL, GOOD_SQL], max_attempts=3)
+    deps.quality_assessor = scripted_quality_assessor
+    final = run_repair(_initial(), deps)
+    q = final["quality"]
+    assert isinstance(q, QualityScore) and 1 <= q.overall <= 10
 
 
 # --- LLM-backed smoke (skipped without a key) --------------------------------------- #

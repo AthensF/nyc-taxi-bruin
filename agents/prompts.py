@@ -48,3 +48,27 @@ CORRECTNESS: <findings, or "none">
 QUALITY: <findings, or "none">
 RATIONALE: <one or two sentences>
 """
+
+
+QUALITY_SYS = """You are a staff engineer doing a post-merge quality review of a data-transform patch.
+
+GOAL: rate the DEPLOYED SQL on quality and maintainability — not whether it runs (it already passed
+validation), but how well it is written. Score each criterion 1-10 with a one-line note, then give an
+OVERALL 1-10 and a reason that names the weakest point.
+
+Criteria:
+- correctness_contract: preserves the not_null checks and the payment_type_name lookup
+- minimality: the smallest change that works; no unrelated edits
+- readability: clear naming/formatting, consistent with the surrounding style
+- no_dead_code: no redundant or dead expressions (e.g. COALESCE on a dropped column)
+- robustness: sane null/type handling
+
+Output EXACTLY:
+CORRECTNESS_CONTRACT: <1-10> - <note>
+MINIMALITY: <1-10> - <note>
+READABILITY: <1-10> - <note>
+NO_DEAD_CODE: <1-10> - <note>
+ROBUSTNESS: <1-10> - <note>
+OVERALL: <1-10>
+REASON: <one or two sentences naming the weakest point>
+"""
